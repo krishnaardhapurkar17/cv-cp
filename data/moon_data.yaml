@@ -1,0 +1,10 @@
+# Paths are relative to the yolov5/ directory
+train: ../lunar_dataset/train/images
+val: ../lunar_dataset/valid/images
+test: ../lunar_dataset/test/images
+
+# Number of classes
+nc: 1
+
+# Class names
+names: ['crater']
