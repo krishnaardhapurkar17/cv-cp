@@ -35,9 +35,9 @@ import platform
 import sys
 from pathlib import Path
 
+import cv2  # ADDED: For heatmap creation and image manipulation
+import numpy as np  # ADDED: For heatmap creation
 import torch
-import numpy as np # ADDED: For heatmap creation
-import cv2 # ADDED: For heatmap creation and image manipulation
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -57,7 +57,7 @@ from utils.general import (
     check_imshow,
     check_requirements,
     colorstr,
-    cv2, # Ensure cv2 is properly imported if it was not already (it is now explicitly at the top)
+    cv2,  # Ensure cv2 is properly imported if it was not already (it is now explicitly at the top)
     increment_path,
     non_max_suppression,
     print_args,
@@ -254,11 +254,11 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, font_size=0.2, example=str(names))
-            
+
             # --- CUSTOM CODE START: For Heatmap - Initialize per image ---
             # If this is the first detection for this image, create the heatmap canvas
             # We initialize it here per image, so it matches the image dimensions
-            heatmap = np.zeros_like(im0, dtype=np.float32) 
+            heatmap = np.zeros_like(im0, dtype=np.float32)
             # --- CUSTOM CODE END ---
 
             if len(det):
@@ -277,28 +277,34 @@ def run(
 
                     # --- CUSTOM CODE START: Size Estimation & Heatmap Population ---
                     # Calculate the pixel diameter
-                    x1, y1, x2, y2 = xyxy # Bounding box coordinates
-                    pixel_width = (x2 - x1).item() # .item() to get scalar from tensor
+                    x1, y1, x2, y2 = xyxy  # Bounding box coordinates
+                    pixel_width = (x2 - x1).item()  # .item() to get scalar from tensor
                     pixel_height = (y2 - y1).item()
-                    pixel_diameter = (pixel_width + pixel_height) / 2 # Average of width and height
+                    pixel_diameter = (pixel_width + pixel_height) / 2  # Average of width and height
                     real_diameter_m = pixel_diameter * METERS_PER_PIXEL
 
                     # Create the new label with size information
-                    label = f'{conf:.2f} ({real_diameter_m:.1f}m)'
-                    
+                    label = f"{conf:.2f} ({real_diameter_m:.1f}m)"
+
                     # If the detected object is a boulder, add its "heat" to the map
-                    if names[int(c)] == 'boulder':
+                    if names[int(c)] == "boulder":
                         # Get the center of the boulder
                         center_x = int((x1 + x2) / 2)
                         center_y = int((y1 + y2) / 2)
                         # Draw a bright circle on the heatmap canvas at the boulder's location
                         # The radius of the circle can be adjusted to control the "spread" of heat
                         # Use a higher value for brighter spots, e.g., 255
-                        cv2.circle(heatmap, (center_x, center_y), radius=int(pixel_diameter / 4), color=(255, 255, 255), thickness=-1)
+                        cv2.circle(
+                            heatmap,
+                            (center_x, center_y),
+                            radius=int(pixel_diameter / 4),
+                            color=(255, 255, 255),
+                            thickness=-1,
+                        )
                     # --- CUSTOM CODE END ---
 
                     if save_csv:
-                        write_to_csv(p.name, label, f"{float(conf):.2f}") # Ensure confidence is float for csv
+                        write_to_csv(p.name, label, f"{float(conf):.2f}")  # Ensure confidence is float for csv
 
                     if save_txt:  # Write to file
                         if save_format == 0:
@@ -315,7 +321,9 @@ def run(
                         # c = int(cls)  # integer class - ALREADY DEFINED
                         # label = None if hide_labels else (names[c] if hide_conf else f"{names[c]} {conf:.2f}") # ORIGINAL LINE
                         # The label is already constructed with size info in the custom code block above
-                        annotator.box_label(xyxy, label if not hide_labels else None, color=colors(c, True)) # Pass the custom label
+                        annotator.box_label(
+                            xyxy, label if not hide_labels else None, color=colors(c, True)
+                        )  # Pass the custom label
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
 
@@ -347,16 +355,16 @@ def run(
                         save_path = str(Path(save_path).with_suffix(".mp4"))  # force *.mp4 suffix on results videos
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
                     vid_writer[i].write(im0)
-            
+
             # --- CUSTOM CODE START: Process and Save Heatmap ---
             # After the loop, if a heatmap was created (i.e., boulders were detected for this image)
-            if heatmap is not None and np.any(heatmap > 0): # Check if any boulders were actually detected
+            if heatmap is not None and np.any(heatmap > 0):  # Check if any boulders were actually detected
                 # Apply a blur to smooth the heatmap
-                heatmap = cv2.GaussianBlur(heatmap, (151, 151), 0) # Adjust kernel size (e.g., (151, 151)) as needed
-                
+                heatmap = cv2.GaussianBlur(heatmap, (151, 151), 0)  # Adjust kernel size (e.g., (151, 151)) as needed
+
                 # Normalize heatmap to 0-255 range for colormap
                 heatmap_normalized = cv2.normalize(heatmap, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-                
+
                 # Apply a color map to the blurred heatmap (JET is a good choice for heat)
                 heatmap_colored = cv2.applyColorMap(heatmap_normalized, cv2.COLORMAP_JET)
 
@@ -367,11 +375,10 @@ def run(
                 # Construct the heatmap filename
                 # Use p.with_suffix('') to remove original extension, then add _heatmap.jpg
                 heatmap_filename = str(save_dir / f"{p.stem}_heatmap.jpg")
-                
+
                 cv2.imwrite(heatmap_filename, superimposed_img)
                 LOGGER.info(f"Boulder density heatmap saved to {heatmap_filename}")
             # --- CUSTOM CODE END ---
-
 
         # Print time (inference-only)
         LOGGER.info(f"{s}{'' if len(det) else '(no detections), '}{dt[1].dt * 1e3:.1f}ms")
